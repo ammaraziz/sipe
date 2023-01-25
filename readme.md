@@ -33,6 +33,12 @@ TBA
 
 ### Run
 
+Activate conda env
+```
+conda activate sipe
+```
+
+sample
 ```
 snakemake -j {threads} -k
 ```
@@ -42,15 +48,15 @@ snakemake -j {threads} -k
 Install conda then mamba. Then run
 
 ```
-tba
+mamba create -n sipe -c bioconda -c conda-forge -k ivar bowtie2 fastp bamtools snakemake
 ```
 
 ### Depends
 
+Install in order:
 1. conda/mamba
-2. bowtie2
-3. samtools
-4. bamtools
-4. fastp
-5. mosdepth
-7. ivar - install  this first
+2. ivar
+3. bowtie2
+4. samtools
+5. bamtools
+6. fastp
