@@ -1,9 +1,7 @@
 {
-  "input_dir": "/path/to/input",
-  "reference": "/path/to/bwa/ref",
+  "input_dir": "/home/aaziz/repos/sipe/data",
+  "out_dir": "/home/aaziz/repos/sipe/analysis",
+  "reference": "/home/aaziz/repos/sipe/reference/entero_vp/index",
   "bed_file": "/path/to/primer/bed/file",
-  "out_dir": "/path/to/outdir",
-  "samples_path": "example_samples.tsv",
-  "library_delimiter": "_"
 }
 
