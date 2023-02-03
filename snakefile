@@ -17,7 +17,7 @@ input_dir = Path(config["input_dir"])
 #samples = pd.read_table(samples_path, sep="\t")
 SAMPLE_NAME, SAMPLE_NUMBER, PAIR = glob_wildcards(input_dir / "{sample_name}_{sample_number}_L001_{pair}_001.fastq.gz")
 SAMPLES = list(set([i + "_" + x for i, x in zip(SAMPLE_NAME, SAMPLE_NUMBER)]))
-print(input_dir)
+print(SAMPLES)
 rule all:
     input:
         expand(out_dir / "qc/{sample}.html", sample = SAMPLES),

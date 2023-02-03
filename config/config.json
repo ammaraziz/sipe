@@ -1,7 +1,7 @@
 {
-  "input_dir": "/home/aaziz/repos/sipe/data",
-  "out_dir": "/home/aaziz/repos/sipe/analysis",
-  "reference": "/home/aaziz/repos/sipe/reference/entero_vp/index",
+  "input_dir": "data/",
+  "out_dir": "analysis/",
+  "reference": "reference/entero_wgf/index",
   "bed_file": "/path/to/primer/bed/file",
 }
 
