@@ -3,43 +3,31 @@
 
 # from https://onestopdataanalysis.com/depth-plot/
  
-import seaborn as sns
-import numpy as np
+from collections import defaultdict
+import toyplot
+import toyplot.pdf 
  
-from matplotlib import (pyplot as plt,
-                        lines)
- 
- 
-def parse_depth(depth_input, genome_size):
+def parse_depth(depth_input):
     """Parse depth file.
  
     Args:
-        depth_input (str): Path to depth file.
-        genome_size (int): Genome size.
- 
+        depth_input (str): Path to depth file. 
     Returns:
         list: List with depth.
  
     """
-    depth = [0] * genome_size
-    references = set()
- 
+
+    depths = defaultdict(dict)
     with open(depth_input) as depth_object:
         for row in depth_object:
-            genome_id, position, depth_count = row.split()
+            genome_id, position, depth_count = row.rstrip('\n').split("\t")
+            depths[genome_id].update({position : depth_count})
+    return(depths)
  
-            references.add(genome_id)
- 
-            if len(references) > 1:
-                raise Exception(' This script only handles one genome - contig.')
- 
-            depth[int(position)] = int(depth_count)
- 
-    return depth
- 
- 
-def plot_depth(depth_report, output_name, plot_title, genome_size, normalize=False, depth_cut_off=20):
-    """Plot genome Depth across genome.
+def plot_depth(y, output_name, plot_title, normalize=False):
+    
+    '''
+    Plot genome Depth across genome.
  
     Args:
         depth_report (str): Path to samtool's depth file.
@@ -48,24 +36,14 @@ def plot_depth(depth_report, output_name, plot_title, genome_size, normalize=Fal
         genome_size (int): Genome size.
         normalize (bool): If `True`, normalizes the depth by the largest depth (default = `False`).
         depth_cut_off (int): Plot a line to represent a targeted depth (default = 20).
- 
-    """
-    data = parse_depth(depth_report, genome_size)
+    '''
+
  
     y_label = "Normalized Depth" if normalize else "Depth"
     data = [xx / max(data) for xx in data] if normalize else data
  
-    sns.set(color_codes=True)
-    plt.title(plot_title)
-    ax = plt.subplot(111)
- 
-    sns_plot = sns.lineplot(x=range(len(data)), y=data)
-    sns_plot.set(xlabel='Genome Position (bp)', ylabel=y_label)
- 
-    if not normalize:
-        ax.add_line(lines.Line2D([0, genome_size + 1], [depth_cut_off], color="r"))
- 
-    plt.savefig(output_name, bbox_inches='tight', dpi=400)
-    plt.close()
- 
+    canvas = toyplot.Canvas(width=1200, height=900)
+    axes = canvas.cartesian()
+    mark = axes.plot(y)
+
     print("Done :)")
