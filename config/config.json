@@ -1,7 +1,6 @@
 {
   "input_dir": "data/",
-  "out_dir": "analysis/",
-  "reference": "reference/entero_wgf/index",
-  "bed_file": "/path/to/primer/bed/file",
+  "out_dir": "results/",
+  "reference": "resources/entero_wgf/index",
+  "bed_file": "/path/to/primer/bed/file"
 }
-

@@ -1,0 +1,41 @@
+Read1 before filtering:
+total reads: 201542
+total bases: 29543170
+Q20 bases: 29110425(98.5352%)
+Q30 bases: 28305276(95.8099%)
+
+Read2 before filtering:
+total reads: 201542
+total bases: 29543170
+Q20 bases: 29110425(98.5352%)
+Q30 bases: 28305276(95.8099%)
+
+Read1 after filtering:
+total reads: 201001
+total bases: 29505445
+Q20 bases: 29096770(98.6149%)
+Q30 bases: 28295720(95.9%)
+
+Read2 after filtering:
+total reads: 201001
+total bases: 29505445
+Q20 bases: 29096770(98.6149%)
+Q30 bases: 28295720(95.9%)
+
+Filtering result:
+reads passed filter: 402002
+reads failed due to low quality: 1082
+reads failed due to too many N: 0
+reads failed due to too short: 0
+reads with adapter trimmed: 26
+bases trimmed due to adapters: 1740
+
+Duplication rate: 77.3794%
+
+Insert size peak (evaluated by paired-end reads): 35
+
+JSON report: fastp.json
+HTML report: analysis/qc/EVGS-0030_S6.html
+
+fastp -i data/EVGS-0030_S6_L001_R1_001.fastq.gz -I data/EVGS-0030_S6_L001_R1_001.fastq.gz -h analysis/qc/EVGS-0030_S6.html 
+fastp v0.23.2, time used: 2 seconds

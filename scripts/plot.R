@@ -1,7 +1,7 @@
 library(ggplot2)
 files = list.files(path = "../analysis/depth/raw/", pattern = ".txt",full.names = T)
 
-for (f in files[11:length(files)]) {
+for (f in files) {
   output_name = gsub(".txt", ".pdf", f)
   
   dat = read.delim(f, header = F, sep = "\t")
