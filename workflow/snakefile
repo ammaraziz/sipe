@@ -7,7 +7,9 @@ from shutil import copyfile
 from datetime import datetime
 
 configfile: "config/config.json"
-reference = Path(config["reference"])
+reference_blast = Path(config["reference_blast"])
+reference_wgf = Path(config["reference_wgf"])
+
 bed_file = Path(config["bed_file"])
 out_dir = Path(config["out_dir"])
 input_dir = Path(config["input_dir"])
@@ -18,14 +20,24 @@ input_dir = Path(config["input_dir"])
 SAMPLE_NAME, SAMPLE_NUMBER, PAIR = glob_wildcards(input_dir / "{sample_name}_{sample_number}_L001_{pair}_001.fastq.gz")
 SAMPLES = list(set([i + "_" + x for i, x in zip(SAMPLE_NAME, SAMPLE_NUMBER)]))
 
+# def aggregate_split_reads(wildcards):
+# 	checkpoint_output = checkpoints.split_reads.get(**wildcards).output[0]
+# 	cSAMPLES, cPAIR = glob_wildcards(out_dir / "split_reads/{Csample}_{Cpair}.fastq.gz")
+# 	file_names = expand(out_dir / "split_reads/{sample}_{pair}.fastq.gz", 
+# 		sample=cSAMPLES, pair = ['R1', 'R2'])
+# 	print(file_names)
+# 	return(file_names)
+
 rule all:
-    input:
-        expand(out_dir / "qc/{sample}.html", sample = SAMPLES),
-        expand(out_dir / "align/{sample}/{sample}.bam", sample = SAMPLES),
-        expand(out_dir / "status/{sample}.mkblastdb.bam", sample = SAMPLES),
-        expand(out_dir / "status/{sample}.split.bam", sample = SAMPLES),
-        expand(out_dir / "depth/raw/{sample}.txt", sample = SAMPLES),
-        #expand(out_dir / "depth/raw/{sample}.png", sample = SAMPLES),
+	input:
+		expand(out_dir / "qc/{sample}.html", sample = SAMPLES),
+		expand(out_dir / "blast/{sample}.result.xml", sample = SAMPLES),
+		expand(out_dir / "status/{sample}.parseblast", sample = SAMPLES),
+		expand(out_dir / "status/{sample}.reference", sample = SAMPLES),
+		expand(out_dir / "status/{sample}.bowtie2.index", sample = SAMPLES),
+		expand(out_dir / "status/{sample}.align", sample = SAMPLES),
+		expand(out_dir / "status/{sample}.bamsplit", sample = SAMPLES),
+		expand(out_dir / "status/{sample}.consensus", sample = SAMPLES),
 
 rule qc:
 	message: "Running fastp on {wildcards.sample}"
@@ -38,7 +50,7 @@ rule qc:
 		forward = out_dir / "qc/{sample}_R1.fastq.gz",
 		rev = out_dir / "qc/{sample}_R2.fastq.gz",
 	params:
-		primers = "../resources/primers.fasta",
+		primers = "resources/primers.fasta",
 	conda: "envs/qc.yaml"
 	shell:"""
 	fastp \
@@ -47,23 +59,8 @@ rule qc:
 	-o {output.forward} \
 	-O {output.rev} \
 	--adapter_fasta {params.primers} \
+	--json /dev/null \
 	-h {output.report} 2> {output.stats}
-	"""
-
-rule mkblastdb:
-	message: "Creating blast db"
-	input:
-		reference = reference
-	output:
-		status = out_dir / "status/{sample}.mkblastdb"
-	threads: 1
-	conda: "envs/blast.yaml"
-	shell:"""
-	makeblastdb \
-	-in {input.reference} \
-	-title "entero" \
-	-dbtype nucl \
-	-hash_index
 	"""
 
 rule run_blast:
@@ -73,123 +70,107 @@ rule run_blast:
 	output:
 		results = out_dir / "blast/{sample}.result.xml"
 	params:
-		db = reference.parent / reference.stem
-	threads: 8
+		db = reference_blast,
+		blast_dir = out_dir / "blast"
+	conda: "envs/blast.yaml"
+	threads: 4
 	shell:"""
+	mkdir -p {params.blast_dir}
+
 	seqkit fq2fa {input.forward} \
 	| blastn -outfmt 5 -task megablast \
 	-out {output.results} \
 	-db {params.db} \
-	-max_target_seqs 1P \
-	-num_threads {threads} 2> dev/null
+	-max_target_seqs 1 \
+	-num_threads 8 2> /dev/null
 	"""
 
-rule parse_blast:
+checkpoint parse_blast:
 	message: "Filtering blast results for reads > 500 between genome region: 750 - 3500"
 	input:
-		xml = rules.run_blast.output.result
+		xml = rules.run_blast.output.results
 	output:
-		tsv = out_dir / "blast/{sample}.sorted.tsv"
+		status = out_dir / "status/{sample}.parseblast",
 	params:
-		out_dir = out_dir
-	run:
-		from Bio.Blast import NCBIXML
-		from collections import defaultdict
-		from csv import DictWriter
-		
-		result_handle = open(input.xml)
-		blast_records = NCBIXML.parse(result_handle)
-		
-		reads_by_entero = defaultdict(list)
-		blast_results = []
-
-		for record in blast_records:
-			read_name = record.query
-			top_hit = record.alignments[0].hit_def
-			
-			query_start = record.alignments[0].hsps[0].query_start
-			query_end = record.alignments[0].hsps[0].query_end
-			subject_start = record.alignments[0].hsps[0].sbjct_start
-			subject_end = record.alignments[0].hsps[0].sbjct_end
-			score = record.alignments[0].hsps[0].score
-
-			reads_by_entero[top_hit].append(read_name)
-			
-			if subject_start > 750 and subject_end < 3500:
-				blast_results.append(
-						{
-						'read_name' : read_name,
-						'top_hit' : top_hit,
-						'query_start' : query_start,
-						'query_end' : query_end,
-						'subject_start' : subject_start,
-						'subject_end' : subject_end,
-						'score' : score
-						}
-						)
-
-		# write out all results
-		keys = ['read_name', 'top_hit', 'query_start', 'query_end', 'subject_start', 'subject_end', 'score']
-		with open(output.tsv, 'wb') as tsv:
-			dict_writer = csv.DictWriter(tsv, keys, delimiter = "\t")
-			dict_writer.writeheader()
-			dict_writer.writerows(blast_results)
-		# write out read names into individual files
-		# only hits with > 500 reads
-		for org in reads_by_entero:
-			if len(org) > 500
-				with open(params.out_dir / "blast" / (f"{sample}_{org}_reads.txt"), 'w') as file:
-					for item in org:
-						file.write(f'{item}\n')
-
-def aggregate_input(wildcards):
-    checkpoints.parse_blast.get(sample=wildcards.sample)
-    orgs = glob_wildcards(f"{wildcards.out_dir}/blast/{wildcards.sample}_{{org}}_reads.txt").orgs
-    return expand(f"{wildcards.out_dir}/blast/{wildcards.sample}_{{org}}_reads.txt", id=orgs)
-
-rule split_blast_reads:
-	input:
-		orgs = glob_wildcards(out_dir / "{org}_reads.txt")
-		forward = expand(input_dir / "{{sample}}_L001_{pair}_001.fastq.gz", pair = ["R1"]),
-		rev = expand(input_dir / "{{sample}}_L001_{pair}_001.fastq.gz", pair = ["R1"])
-	output:
-		status = out_dir / "status/{sample}.split.txt"
-	threads: 8
+		out_dir = out_dir / "blast/"
+	threads: 1
+	conda: "envs/blast.yaml"
 	shell:"""
-	seqkit grep -f 
+	python scripts/parse_blast.py \
+	--input-xml {input.xml} \
+	--output-dir {params.out_dir} \
+	--sample {wildcards.sample}
+
+	touch {output.status}
+	"""
+
+def aggregate_blast(wildcards):
+	
+	# create directory for serotype data
+	import os
+	if not os.path.isdir(f"{out_dir}/align/"):
+		os.makedirs(f"{out_dir}/align/")
+
+	serotypes = glob_wildcards(f"{out_dir}/blast/{wildcards.sample}_{{serotype}}_reads.txt").serotype
+
+	with open(f"{out_dir}/align/{wildcards.sample}.txt", 'w') as f:
+		for sero in serotypes:
+			f.write(f"{sero}\n")
+	output = f"{out_dir}/align/{wildcards.sample}.txt"
+	checkpoints.parse_blast.get(sample=wildcards.sample)
+	return(output)
+
+rule create_reference:
+	message: "Creating sample specific reference"
+	input:
+		seros = aggregate_blast,
+	output:
+		status = out_dir / "status/{sample}.reference",
+		reference = out_dir / "align/{sample}_reference.fasta",
+	params:
+		reference = reference_wgf,
+	conda: "envs/blast.yaml"
+	shell:"""
+	seqkit grep {params.reference} -r -f {input.seros} \
+	| seqkit replace -p "(_.+$)" -r "" -o {output.reference}
+	touch {output.status}
 	"""
 
 rule build_index:
 	message: "Building bowtie2 index"
 	input:
-		reference = reference
+		reference = rules.create_reference.output.reference
 	output:
-		status = out_dir / "status/bowtie2.index"
+		status = out_dir / "status/{sample}.bowtie2.index"
 	params:
-		prefix = reference.parent / reference.stem
+		prefix = "{sample}",
+		out_dir = out_dir / "align/"
 	threads: 1
 	conda: "envs/align.yaml"
 	shell:"""
-	bowtie2-build -q {input.reference} {params.prefix}
+	bowtie2-build -q {input.reference} {params.out_dir}/{params.prefix}
 	touch {output}
 	"""
 
 rule align:
-	message: "Aligning with bowtie2"
+	message: "Aligning reads with bowtie2 to custom reference"
 	input:
-		forward = expand(input_dir / "{{sample}}_L001_{pair}_001.fastq.gz", pair = ["R1"]),
-		rev = expand(input_dir / "{{sample}}_L001_{pair}_001.fastq.gz", pair = ["R2"]),
+		forward = rules.qc.output.forward,
+		rev = rules.qc.output.rev,
+		index_status = out_dir / "status/{sample}.bowtie2.index"
 	output:
 		bam = out_dir / "align/{sample}/{sample}.bam",
 		stats = out_dir / "align/{sample}/{sample}.stats",
+		status = out_dir / "status/{sample}.align",
 	params:
-		index = reference,
-	threads: 20
+		index = "{sample}",
+		out_dir = out_dir / "align/",
+	threads: 5
 	conda: "envs/align.yaml"
 	shell:"""
 	bowtie2 -q \
 	-p {threads} \
-	-x {params.index} \
+	-x {params.out_dir}/{params.index} \
 	-1 {input.forward} \
 	-2 {input.rev} \
 	--very-sensitive-local \
@@ -197,30 +178,69 @@ rule align:
 	| samtools view -b - \
 	| samtools sort -@ {threads} - 1> {output.bam} 2> /dev/null
 	samtools index {output.bam}
+
+	cat {input.index_status} > {output.status}
 	"""
 
-rule split_bam:
-	message: "Splitting BAM files by chromosome"
+checkpoint split_bam:
+	message: "Splitting Bam files"
 	input:
 		bam = rules.align.output.bam
 	output:
-		status = out_dir / "status/{sample}.split.bam"
-	params:
-		split_prefix = out_dir / "align/{sample}/"
+		status = out_dir / "status/{sample}.bamsplit"
+	conda: "envs/align.yaml"
+	threads: 1
 	shell:"""
-	bamtools split -in {input.bam} -refPrefix {params.split_prefix} -reference
+	bamtools split -in {input.bam} -reference 
 	touch {output.status}
 	"""
 
-rule depth:
-	message: "Calculating depth per alignment"
+def aggregate_bam(wildcards):
+	import glob
+	import os
+	bams = [
+	os.path.basename(x) for x 
+	in glob.glob(f"{out_dir}/align/{wildcards.sample}/*REF*.bam") 
+	if "REF_unmapped.bam" not in x
+	]
+	output = expand(f"{out_dir}/align/{wildcards.sample}/{{bam}}", bam = bams)
+	checkpoints.split_bam.get(sample=wildcards.sample)
+	return(output)
+
+
+rule consensus:
+	message: "Generating consensus for {wildcards.sample}"
 	input:
-		bam = rules.align.output.bam
+		bams = aggregate_bam
 	output:
-		depth = out_dir / "depth/raw/{sample}.txt"
+		status = out_dir / "status/{sample}.consensus"
+	params:
+		input_dir = out_dir / "align/{sample}/",
+		out_dir = out_dir / "consensus/",
+	conda: "envs/consensus.yaml"
+	log: out_dir / "consensus/{sample}.log"
 	shell:"""
-	samtools depth -a {input.bam} -o {output.depth}
+	mkdir -p {params.out_dir}
+
+	for bam in {input.bams}; do
+		f=$(basename $bam)
+		samtools mpileup -a -d 8000 -A -Q 0 $bam \
+		| ivar consensus -t 0.75 -m 10 -n N -p {params.out_dir}/$f >> {log}
+	done
+	touch {output.status}
 	"""
+
+# rule depth:
+# 	message: "Calculating depth per alignment"
+# 	input:
+# 		bam = rules.align.output.bam
+# 	output:
+# 		depth = out_dir / "depth/raw/{sample}.txt",
+# 		status = out_dir / "status/{sample}.depth"
+# 	shell:"""
+# 	samtools depth -a {input.bam} -o {output.depth}
+# 	touch {output.status}
+# 	"""
 
 # rule plot_depth:
 # 	message: "plotting depth"
@@ -230,10 +250,6 @@ rule depth:
 # 		png = outdir / "depth/raw/{sample}.png"
 # 	run:
 # 		import .scripts
-
-
-
-
 
 
 

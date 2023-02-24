@@ -1,0 +1,218 @@
+import os
+import re
+import time
+import pandas as pd
+from pathlib import Path
+from shutil import copyfile
+from datetime import datetime
+
+configfile: "config/config.json"
+reference = Path(config["reference"])
+bed_file = Path(config["bed_file"])
+out_dir = Path(config["out_dir"])
+input_dir = Path(config["input_dir"])
+#samples_path = Path(config["samples_path"])
+
+# get sample names 
+#samples = pd.read_table(samples_path, sep="\t")
+SAMPLE_NAME, SAMPLE_NUMBER, PAIR = glob_wildcards(input_dir / "{sample_name}_{sample_number}_L001_{pair}_001.fastq.gz")
+SAMPLES = list(set([i + "_" + x for i, x in zip(SAMPLE_NAME, SAMPLE_NUMBER)]))
+
+def aggregate_split_reads(wildcards):
+	checkpoint_output = checkpoints.split_reads.get(**wildcards).output[0]
+	cSAMPLES, cPAIR = glob_wildcards(out_dir / "split_reads/{Csample}_{Cpair}.fastq.gz")
+	file_names = expand(out_dir / "split_reads/{sample}_{pair}.fastq.gz", 
+		sample=cSAMPLES, pair = ['R1', 'R2'])
+	print(file_names)
+	return(file_names)
+
+rule all:
+	input:
+		expand(out_dir / "qc/{sample}.html", sample = SAMPLES),
+		expand(out_dir / "blast/{sample}.result.xml", sample = SAMPLES),
+		expand(out_dir / "status/{sample}.parseblast", sample = SAMPLES),
+		expand(out_dir / "status/{sample}.seqkit", sample = SAMPLES),
+		expand(out_dir / "status/{sample}.test1.txt", sample = SAMPLES),
+		expand(out_dir / "status/{sample}.test.txt", sample = SAMPLES),
+
+		#expand(out_dir / "align/{sample}/{sample}.bam", sample = SAMPLES),
+		#expand(out_dir / "status/{sample}.split.bam", sample = SAMPLES),
+		#expand(out_dir / "depth/raw/{sample}.txt", sample = SAMPLES),
+		#expand(out_dir / "depth/raw/{sample}.png", sample = SAMPLES),
+
+rule qc:
+	message: "Running fastp on {wildcards.sample}"
+	input:
+		forward = expand(input_dir / "{{sample}}_L001_{pair}_001.fastq.gz", pair = ["R1"]),
+		rev = expand(input_dir / "{{sample}}_L001_{pair}_001.fastq.gz", pair = ["R1"]),
+	output:
+		report = out_dir / "qc/{sample}.html",
+		stats = out_dir / "qc/{sample}.stats",
+		forward = out_dir / "qc/{sample}_R1.fastq.gz",
+		rev = out_dir / "qc/{sample}_R2.fastq.gz",
+	params:
+		primers = "resources/primers.fasta",
+	conda: "envs/qc.yaml"
+	shell:"""
+	fastp \
+	-i {input.forward} \
+	-I {input.rev} \
+	-o {output.forward} \
+	-O {output.rev} \
+	--adapter_fasta {params.primers} \
+	--json /dev/null \
+	-h {output.report} 2> {output.stats}
+	"""
+
+rule run_blast:
+	message: "Classifying reads using blast"
+	input:
+		forward = out_dir / "qc/{sample}_R1.fastq.gz"
+	output:
+		results = out_dir / "blast/{sample}.result.xml"
+	params:
+		db = reference / reference.stem,
+		blast_dir = out_dir / "blast"
+	conda: "envs/blast.yaml"
+	threads: 4
+	shell:"""
+	mkdir -p {params.blast_dir}
+
+	seqkit fq2fa {input.forward} \
+	| blastn -outfmt 5 -task megablast \
+	-out {output.results} \
+	-db {params.db} \
+	-max_target_seqs 1 \
+	-num_threads {threads} 2> /dev/null
+	"""
+
+checkpoint parse_blast:
+	message: "Filtering blast results for reads > 500 between genome region: 750 - 3500"
+	input:
+		xml = rules.run_blast.output.results
+	output:
+		status = out_dir / "status/{sample}.parseblast",
+	params:
+		out_dir = out_dir / "blast/"
+	threads: 1
+	conda: "envs/blast.yaml"
+	shell:"""
+	python scripts/parse_blast.py \
+	--input-xml {input.xml} \
+	--output-dir {params.out_dir} \
+	--sample {wildcards.sample}
+
+	touch {output.status}
+	"""
+
+def aggregate_blast(wildcards):
+    checkpoints.parse_blast.get(sample=wildcards.sample)
+    serotypes = glob_wildcards(f"{out_dir}/blast/{wildcards.sample}_{{serotype}}_reads.txt").serotype
+    return expand(f"{out_dir}/blast/{wildcards.sample}_{{serotype}}_reads.txt", serotype=serotypes)
+
+checkpoint split_reads:
+	message: "Splitting classified reads"
+	input:
+		reads = aggregate_blast,
+		forward = out_dir / "qc/{sample}_R1.fastq.gz",
+		rev = out_dir / "qc/{sample}_R2.fastq.gz"
+	output:
+		status = out_dir / "status/{sample}.seqkit"
+	params:
+		out_dir = out_dir,
+	threads: 2
+	conda: "envs/blast.yaml"
+	shell:"""
+	mkdir -p {params.out_dir}/split_reads/
+
+	for r in {input.reads}; do
+		base_name=$(basename $r)
+		seqkit grep -n -f $r {input.forward} -o {params.out_dir}/split_reads/${{base_name/_reads.txt/_R1.fastq.gz}} --quiet
+		seqkit grep -n -f $r {input.rev} -o {params.out_dir}/split_reads/${{base_name/_reads.txt/_R2.fastq.gz}} --quiet
+	done
+	touch {output.status}
+	"""
+
+# THIS IS WORKING!!!! Csample works!
+rule test:
+	input:
+		test1 = aggregate_split_reads,
+		test = out_dir / "split_reads/{Csample}_EchovirusE2_R1.fastq.gz"
+	output:
+		first = out_dir / "status/{sample}.test1.txt",
+		second = out_dir / "status/{Csample}.test.txt"
+	shell:"""
+	echo {input.test1}
+	echo {input.test}
+	touch {output.first}
+	touch {output.second}
+	"""
+
+# rule build_index:
+# 	message: "Building bowtie2 index"
+# 	input:
+# 		reference = reference
+# 	output:
+# 		status = out_dir / "status/bowtie2.index"
+# 	params:
+# 		prefix = reference.parent / reference.stem
+# 	threads: 1
+# 	conda: "envs/align.yaml"
+# 	shell:"""
+# 	bowtie2-build -q {input.reference} {params.prefix}
+# 	touch {output}
+# 	"""
+
+# rule align:
+# 	message: "Aligning with bowtie2"
+# 	input:
+# 		forward = expand(input_dir / "{{sample}}_L001_{pair}_001.fastq.gz", pair = ["R1"]),
+# 		rev = expand(input_dir / "{{sample}}_L001_{pair}_001.fastq.gz", pair = ["R2"]),
+# 	output:
+# 		bam = out_dir / "align/{sample}/{sample}.bam",
+# 		stats = out_dir / "align/{sample}/{sample}.stats",
+# 	params:
+# 		index = reference,
+# 	threads: 20
+# 	conda: "envs/align.yaml"
+# 	shell:"""
+# 	bowtie2 -q \
+# 	-p {threads} \
+# 	-x {params.index} \
+# 	-1 {input.forward} \
+# 	-2 {input.rev} \
+# 	--very-sensitive-local \
+# 	2> {output.stats} \
+# 	| samtools view -b - \
+# 	| samtools sort -@ {threads} - 1> {output.bam} 2> /dev/null
+# 	samtools index {output.bam}
+# 	"""
+
+# rule depth:
+# 	message: "Calculating depth per alignment"
+# 	input:
+# 		bam = rules.align.output.bam
+# 	output:
+# 		depth = out_dir / "depth/raw/{sample}.txt"
+# 	shell:"""
+# 	samtools depth -a {input.bam} -o {output.depth}
+# 	"""
+
+# # rule plot_depth:
+# # 	message: "plotting depth"
+# # 	input:
+# # 		depth = rules.depth.output.plot
+# # 	output:
+# # 		png = outdir / "depth/raw/{sample}.png"
+# # 	run:
+# # 		import .scripts
+
+
+
+
+
+
+
+
+
+

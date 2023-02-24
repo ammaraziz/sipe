@@ -1,6 +1,7 @@
 {
   "input_dir": "data/",
   "out_dir": "results/",
-  "reference": "resources/entero_wgf/index",
+  "reference_wgf": "resources/reference/entero_wgf/sequences.unique.fasta",
+  "reference_blast": "resources/reference/entero_vp/entero_vp",
   "bed_file": "/path/to/primer/bed/file"
 }
