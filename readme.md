@@ -3,33 +3,32 @@
 ### Overview
 
 1. fastp 	- trim and qc 
-2. Bowtie2 	- Align to VP1 nr entero reference set using 
-3. ivar 	- trim primers
+2. blast	- blast reads against vp1 reference
+3. Bowtie2 	- Align to full genome nr entero reference set 
 4. ivar		- create consensus
-5. mosdepth - generate depth coverage report
 
 ### Inputs
 
 - config.yaml
-	- samples_path: path to sample.tsv
 	- out_dir: path to output directory
-	- reference[vp1, wgs]: specify reference set, vp or whole genome
-	- bed_file: path to primer bed files
-	- library_delimiter['_']: file name delimiter 
+	- reference_wgf: path to reference for alignment
+	- reference_blast: path to blast database
+	- bed_file: path to primer bed files - not used
 	
 - samples.tsv
 	- columns: forward reverse sample sample_library
 
 ### Outputs
 
-TBA
-
 1. See `analysis/` folder
-	- `alignments/{sample}/{sample}.bam`
-	- `consensus/{sample}/{sample}.consensus.fasta`
-	- `depth/{sample}/{sample}.depth.txt`
-	- `depth/{sample}/depth.pdf`
+	- `qc/{sample}.{pair}.fastq.gz` - qc'ed fastq
 	- `qc/{sample}.html`
+	- `blast/{sample}.xml` - blast results
+	- `align/{sample}/{sample}.bam`
+	- `consensus/{sample}/{sample}.consensus.fasta`
+	- `depth/{sample}.depth.txt`
+	- `depth/{sample}.pdf`
+
 
 ### Run
 
@@ -45,11 +44,21 @@ snakemake -j {threads} -k
 
 ### Install
 
-Install conda then mamba. Then run
+Install conda/mamba and snakeamke
 
 ```
-mamba create -n sipe -c bioconda -c conda-forge -k ivar bowtie2 fastp bamtools snakemake
+mamba create -c bioconda -c conda-forge snakemake
 ```
+
+### Run:
+
+Navigate to `sipe/` then run:
+
+```
+snakemake -j {cpu} --use-conda
+```
+
+Snakemake will handle the dependency installation.
 
 ### Depends
 
