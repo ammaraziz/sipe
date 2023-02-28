@@ -137,11 +137,13 @@ rule build_index:
 	params:
 		prefix = "{sample}",
 		out_dir = out_dir / "align/"
+	log: out_dir / "status/{sample}.bowtie_build.log"
 	threads: 1
 	conda: "envs/align.yaml"
 	shell:"""
-	bowtie2-build -q {input.reference} {params.out_dir}/{params.prefix}
+	bowtie2-build -q {input.reference} {params.out_dir}/{params.prefix} 2> {log}
 	touch {output}
+	exit 0
 	"""
 
 rule align:
@@ -258,7 +260,7 @@ rule plot_depth:
 		--input $f \
 		--output {params.output}/${bname/.txt/.pdf}\
 	done
-	touch
+	touch {output.status}
 	"""
 
 
