@@ -1,4 +1,6 @@
 channels:
   - bioconda
 dependencies:
-  - fastp
+  - pip
+  - pip:
+    - toyplot

@@ -1,6 +1,6 @@
 {
-  "input_dir": "data/",
-  "out_dir": "results/",
+  "input_dir": "/home/aaziz/projects/entero/iseq_run1/data/",
+  "out_dir": "/home/aaziz/projects/entero/iseq_run1/analysis/",
   "reference_wgf": "resources/reference/entero_wgf/sequences.unique.fasta",
   "reference_blast": "resources/reference/entero_vp/entero_vp",
   "bed_file": "/path/to/primer/bed/file"

@@ -231,11 +231,12 @@ rule depth:
 	params:
 		out_dir = out_dir / "depth/",
 		input_dir = out_dir / "align/{sample}/",
+	conda: "envs/consensus.yaml"
 	shell:"""
 	mkdir -p {params.out_dir}
 	for bam in {input.bams}; do
 		f=$(basename $bam)
-		samtools depth -a $bam -o {params.out_dir}/$f.depth.txt
+		samtools depth -a $bam > {params.out_dir}/$f.depth.txt
 	done
 	touch {output.status}
 	"""
@@ -243,11 +244,12 @@ rule depth:
 rule plot_depth:
 	message: "plotting depth"
 	input:
-		expand(out_dir + "status/{sample}.depth", sample = SAMPLES)
+		expand(out_dir / "status/{sample}.depth", sample = SAMPLES)
 	output:
 		status = out_dir / "status/plotting_complete.txt"
 	params:
 		depth_dir = out_dir / "depth/"
+	conda: "envs/plot.yaml"
 	shell:"""
 	for f in {depth_dir}*.txt;
 		bname=${basename $f}
