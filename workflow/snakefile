@@ -13,20 +13,10 @@ reference_wgf = Path(config["reference_wgf"])
 bed_file = Path(config["bed_file"])
 out_dir = Path(config["out_dir"])
 input_dir = Path(config["input_dir"])
-#samples_path = Path(config["samples_path"])
 
 # get sample names 
-#samples = pd.read_table(samples_path, sep="\t")
 SAMPLE_NAME, SAMPLE_NUMBER, PAIR = glob_wildcards(input_dir / "{sample_name}_{sample_number}_L001_{pair}_001.fastq.gz")
 SAMPLES = list(set([i + "_" + x for i, x in zip(SAMPLE_NAME, SAMPLE_NUMBER)]))
-
-# def aggregate_split_reads(wildcards):
-# 	checkpoint_output = checkpoints.split_reads.get(**wildcards).output[0]
-# 	cSAMPLES, cPAIR = glob_wildcards(out_dir / "split_reads/{Csample}_{Cpair}.fastq.gz")
-# 	file_names = expand(out_dir / "split_reads/{sample}_{pair}.fastq.gz", 
-# 		sample=cSAMPLES, pair = ['R1', 'R2'])
-# 	print(file_names)
-# 	return(file_names)
 
 rule all:
 	input:
@@ -38,6 +28,8 @@ rule all:
 		expand(out_dir / "status/{sample}.align", sample = SAMPLES),
 		expand(out_dir / "status/{sample}.bamsplit", sample = SAMPLES),
 		expand(out_dir / "status/{sample}.consensus", sample = SAMPLES),
+		expand(out_dir / "status/{sample}.depth", sample = SAMPLES),
+		out_dir / "status/plotting_complete.txt"
 
 rule qc:
 	message: "Running fastp on {wildcards.sample}"
@@ -230,27 +222,42 @@ rule consensus:
 	touch {output.status}
 	"""
 
-# rule depth:
-# 	message: "Calculating depth per alignment"
-# 	input:
-# 		bam = rules.align.output.bam
-# 	output:
-# 		depth = out_dir / "depth/raw/{sample}.txt",
-# 		status = out_dir / "status/{sample}.depth"
-# 	shell:"""
-# 	samtools depth -a {input.bam} -o {output.depth}
-# 	touch {output.status}
-# 	"""
+rule depth:
+	message: "Creating depth from bam file and plotting"
+	input:
+		bams = aggregate_bam
+	output:
+		status = out_dir / "status/{sample}.depth"
+	params:
+		out_dir = out_dir / "depth/",
+		input_dir = out_dir / "align/{sample}/",
+	shell:"""
+	mkdir -p {params.out_dir}
+	for bam in {input.bams}; do
+		f=$(basename $bam)
+		samtools depth -a $bam -o {params.out_dir}/$f.depth.txt
+	done
+	touch {output.status}
+	"""
 
-# rule plot_depth:
-# 	message: "plotting depth"
-# 	input:
-# 		depth = rules.depth.output.plot
-# 	output:
-# 		png = outdir / "depth/raw/{sample}.png"
-# 	run:
-# 		import .scripts
-
+rule plot_depth:
+	message: "plotting depth"
+	input:
+		expand(out_dir + "status/{sample}.depth", sample = SAMPLES)
+	output:
+		status = out_dir / "status/plotting_complete.txt"
+	params:
+		depth_dir = out_dir / "depth/"
+	shell:"""
+	for f in {depth_dir}*.txt;
+		bname=${basename $f}
+		
+		python scripts/depth_plot.py \
+		--input $f \
+		--output {params.output}/${bname/.txt/.pdf}\
+	done
+	touch
+	"""
 
 
 

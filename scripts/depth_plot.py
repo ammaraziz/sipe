@@ -1,49 +1,66 @@
 # !/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 # from https://onestopdataanalysis.com/depth-plot/
  
 from collections import defaultdict
+import argparse
 import toyplot
 import toyplot.pdf 
- 
+
+
+parser = argparse.ArgumentParser(description='plot depth')
+parser.add_argument('--input',help='path to samtools depth file')
+parser.add_argument('--output',help='path and name for output')
+args = parser.parse_args()
+
 def parse_depth(depth_input):
-    """Parse depth file.
- 
-    Args:
-        depth_input (str): Path to depth file. 
-    Returns:
-        list: List with depth.
- 
-    """
+	"""Parse depth file.
 
-    depths = defaultdict(dict)
-    with open(depth_input) as depth_object:
-        for row in depth_object:
-            genome_id, position, depth_count = row.rstrip('\n').split("\t")
-            depths[genome_id].update({position : depth_count})
-    return(depths)
+	Args:
+		depth_input (str): Path to depth file. 
+	Returns:
+		list: List with depth.
  
-def plot_depth(y, output_name, plot_title, normalize=False):
-    
-    '''
-    Plot genome Depth across genome.
- 
-    Args:
-        depth_report (str): Path to samtool's depth file.
-        output_name (str): Path to output PNG image.
-        plot_title (str): Plot title.
-        genome_size (int): Genome size.
-        normalize (bool): If `True`, normalizes the depth by the largest depth (default = `False`).
-        depth_cut_off (int): Plot a line to represent a targeted depth (default = 20).
-    '''
+	"""
+	# written to handle multiple references
+	# depths = defaultdict(dict)
+	# with open(depth_input) as depth_object:
+	# 	for row in depth_object:
+	# 		genome_id, position, depth_count = row.rstrip('\n').split("\t")
+	# 		depths[genome_id].update({position : depth_count})
+	# return(depths)
+	depth = []
+	references = set()
 
- 
-    y_label = "Normalized Depth" if normalize else "Depth"
-    data = [xx / max(data) for xx in data] if normalize else data
- 
-    canvas = toyplot.Canvas(width=1200, height=900)
-    axes = canvas.cartesian()
-    mark = axes.plot(y)
+	with open(depth_input) as depth_object:
+		for row in depth_object:
+			genome_id, position, depth_count = row.split()
 
-    print("Done :)")
+			references.add(genome_id)
+
+			if len(references) > 1:
+				raise Exception(' This script only handles one genome - contig.')
+ 
+			depth.append(int(depth_count))
+
+	return depth
+
+
+
+def plot_depth(depth_data, plot_title):
+	
+	'''
+	Plot genome Depth across genome.
+	'''
+
+	canvas = toyplot.Canvas(width=1200, height=900)
+	axes = canvas.cartesian(label=plot_title, xlabel="Depth", ylabel="Genomic Position")
+	mark = axes.plot(depth_data)
+	return(canvas)
+
+
+depth_data = parse_depth(args.input)
+plot_title = args.output.split('.')[0]
+canvas = plot_depth(depth_data, plot_title)
+toyplot.pdf.render(canvas, args.output)
+print("Plotting Done")
