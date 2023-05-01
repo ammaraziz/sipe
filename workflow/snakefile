@@ -65,7 +65,7 @@ rule run_blast:
 		db = reference_blast,
 		blast_dir = out_dir / "blast"
 	conda: "envs/blast.yaml"
-	threads: 4
+	threads: 50
 	shell:"""
 	mkdir -p {params.blast_dir}
 
@@ -74,7 +74,7 @@ rule run_blast:
 	-out {output.results} \
 	-db {params.db} \
 	-max_target_seqs 1 \
-	-num_threads 8 2> /dev/null
+	-num_threads {threads} 2> /dev/null
 	"""
 
 checkpoint parse_blast:

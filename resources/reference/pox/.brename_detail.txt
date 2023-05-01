@@ -1,0 +1,10 @@
+pox.fasta.ndb	_shenwei356-brename_	pox.ndb
+pox.fasta.nhd	_shenwei356-brename_	pox.nhd
+pox.fasta.nhi	_shenwei356-brename_	pox.nhi
+pox.fasta.nhr	_shenwei356-brename_	pox.nhr
+pox.fasta.nin	_shenwei356-brename_	pox.nin
+pox.fasta.nog	_shenwei356-brename_	pox.nog
+pox.fasta.not	_shenwei356-brename_	pox.not
+pox.fasta.nsq	_shenwei356-brename_	pox.nsq
+pox.fasta.ntf	_shenwei356-brename_	pox.ntf
+pox.fasta.nto	_shenwei356-brename_	pox.nto
