@@ -29,19 +29,6 @@
 	- `depth/{sample}.depth.txt`
 	- `depth/{sample}.pdf`
 
-
-### Run
-
-Activate conda env
-```
-conda activate sipe
-```
-
-sample
-```
-snakemake -j {threads} -k
-```
-
 ### Install
 
 Install conda/mamba and snakeamke
