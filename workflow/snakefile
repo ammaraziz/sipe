@@ -35,7 +35,7 @@ rule qc:
 	message: "Running fastp on {wildcards.sample}"
 	input:
 		forward = expand(input_dir / "{{sample}}_L001_{pair}_001.fastq.gz", pair = ["R1"]),
-		rev = expand(input_dir / "{{sample}}_L001_{pair}_001.fastq.gz", pair = ["R1"]),
+		rev = expand(input_dir / "{{sample}}_L001_{pair}_001.fastq.gz", pair = ["R2"]),
 	output:
 		report = out_dir / "qc/{sample}.html",
 		stats = out_dir / "qc/{sample}.stats",
